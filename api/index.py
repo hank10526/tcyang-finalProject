@@ -117,7 +117,7 @@ def save_weather_to_firestore():
 
     params = {
         "Authorization": "CWA-9EB210BC-3D81-4B72-9B0C-DD6DE37E84EF",  # 你的授權碼
-        "locationName": "臺北市",  # 可以自行更改想查詢的縣市，例如 "台中市"、"高雄市"
+        "locationName": "全台天氣預報",  # 可以自行更改想查詢的縣市，例如 "台中市"、"高雄市"
     }
 
     # 2. 發送請求並取得 Response Body (JSON 格式)
