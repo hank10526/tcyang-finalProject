@@ -110,67 +110,70 @@ def webhook():
 
     return make_response(jsonify({"fulfillmentText": info}))
 
-@app.route("/rate")
-def rate():
-    #本週新片
-    url = "https://www.atmovies.com.tw/movie/new/"
-    Data = requests.get(url)
-    Data.encoding = "utf-8"
-    sp = BeautifulSoup(Data.text, "html.parser")
-    lastUpdate = sp.find(class_="smaller09").text[5:]
-    print(lastUpdate)
-    print()
+@app.route("/rate")#改全台天氣預報(降雨率)
+def save_weather_to_firestore():
+    # 1. 設定氣象署 API 網址與你的授權碼
+    url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001"
 
-    result=sp.select(".filmList")
+    params = {
+        "Authorization": "CWA-9EB210BC-3D81-4B72-9B0C-DD6DE37E84EF",  # 你的授權碼
+        "locationName": "臺北市",  # 可以自行更改想查詢的縣市，例如 "台中市"、"高雄市"
+    }
 
-    for x in result:
-        title = x.find("a").text
-        introduce = x.find("p").text
+    # 2. 發送請求並取得 Response Body (JSON 格式)
+    response = requests.get(url, params=params)
 
-        movie_id = x.find("a").get("href").replace("/", "").replace("movie", "")
-        hyperlink = "http://www.atmovies.com.tw/movie/" + movie_id
-        picture = "https://www.atmovies.com.tw/photo101/" + movie_id + "/pm_" + movie_id + ".jpg"
+    if response.status_code == 200:
+        data = response.json()
 
-        r = x.find(class_="runtime").find("img")
-        rate = ""
-        if r != None:
-            rr = r.get("src").replace("/images/cer_", "").replace(".gif", "")
-            if rr == "G":
-                rate = "普遍級"
-            elif rr == "P":
-                rate = "保護級"
-            elif rr == "F2":
-                rate = "輔12級"
-            elif rr == "F5":
-                rate = "輔15級"
-            else:
-                rate = "限制級"
+        # 3. 撥開 JSON 的外殼，找到臺北市的觀測資料
+        # 結構對應：records -> location 清單 -> 第 0 個元素 (臺北市)
+        location_data = data["records"]["location"][0]
+        location_name = location_data["locationName"]
 
-        t = x.find(class_="runtime").text
+        # 取得天氣要素清單 (Wx, PoP, MinT, MaxT 等)
+        weather_elements = location_data["weatherElement"]
 
-        t1 = t.find("片長")
-        t2 = t.find("分")
-        showLength = t[t1+3:t2]
+        # 4. 解析各個天氣欄位 (取 time[0] 代表最近這一個時段，通常是未來 12 小時)
+        # Wx (天氣現象，如：陰陣雨或雷雨)
+        condition = weather_elements[0]["time"][0]["parameter"]["parameterName"]
 
-        t1 = t.find("上映日期")
-        t2 = t.find("上映廳數")
-        showDate = t[t1+5:t2-8]
+        # PoP (降雨機率，如：70)
+        pop = weather_elements[1]["time"][0]["parameter"]["parameterName"]
 
+        # MinT (最低溫度，如：25)
+        min_temp = weather_elements[2]["time"][0]["parameter"]["parameterName"]
+
+        # MaxT (最高溫度)
+        max_temp = weather_elements[4]["time"][0]["parameter"]["parameterName"]
+
+        # 取得這個預報時段的結束時間，當作資料的更新參考
+        end_time = weather_elements[0]["time"][0]["endTime"]
+
+        # 5. 打包成準備存入 Firestore 的字典格式 (對應你原本的 doc)
         doc = {
-            "title": title,
-            "introduce": introduce,
-            "picture": picture,
-            "hyperlink": hyperlink,
-            "showDate": showDate,
-            "showLength": int(showLength),
-            "rate": rate,
-            "lastUpdate": lastUpdate
+            "location": location_name,  # 縣市名稱
+            "condition": condition,  # 天氣現象
+            "pop": int(pop),  # 降雨機率（轉成整數）
+            "min_temp": int(min_temp),  # 最低溫（轉成整數）
+            "max_temp": int(max_temp),  # 最高溫（轉成整數）
+            "lastUpdate": end_time,  # 預報結束時間
         }
 
+        # 6. 寫入 Firebase Firestore 資料庫
         db = firestore.client()
-        doc_ref = db.collection("本週新片含分級").document(movie_id)
+        # 集合名稱改為 "今日天氣预報"，文件 ID 使用縣市名稱 (例如: 臺北市)
+        doc_ref = db.collection("今日天氣預報").document(location_name)
         doc_ref.set(doc)
-    return "本週新片已爬蟲及存檔完畢，網站最近更新日期為：" + lastUpdate
+
+        return f"【{location_name}】天氣資料已更新並存檔完畢！預報有效至：{end_time}"
+
+    else:
+        return f"連線失敗，錯誤代碼：{response.status_code}"
+
+
+# 執行函式
+# print(save_weather_to_firestore())
 @app.route("/")
 def index():
     return render_template("index.html")
