@@ -82,44 +82,39 @@ def AI():
 
 
 @app.route("/webhook", methods=["POST"])
-# 假設 client 已經在外部初始化（例如：client = genai.Client()）
-
 def webhook():
-    # 初始化預設回覆，避免極端狀況下變數未定義
     info = "抱歉，系統處理時發生錯誤。"
     
     try:
-        # 建立 request 物件並取得 action
         req = request.get_json(force=True)
         action = req.get("queryResult", {}).get("action", "")
 
-        # -------------------------------------------------------------
-        # 行為一：撈取 Firestore 的「今日天氣預報」
-        # -------------------------------------------------------------
         if action == "weatherQuery" or action == "rateChoice":
-            # 從 Dialogflow 取得使用者想查詢的城市名稱
             city = req["queryResult"]["parameters"].get("city", "")
 
-# 統一台/臺
+            # 統一台/臺
             city = city.replace("台", "臺")
 
-# 補上市
-            if city and not city.endswith("市"):
+            # 定義屬於「縣」的行政區
+            county_list = ["彰化", "南投", "雲林", "屏東", "宜蘭", "花蓮", "臺東", "苗栗", "嘉義", "澎湖", "金門", "連江"]
+
+            # 補上正確的縣/市後綴
+            if city and not city.endswith("市") and not city.endswith("縣"):
+                if city in county_list:
+                    city += "縣"
+                else:
                     city += "市"
 
             info = f"我是天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
             
             db = firestore.client()
             collection_ref = db.collection("今日天氣預報")
-            
-            # 💡 根據您的資料庫，欄位名稱為 "location"
             docs = collection_ref.where("location", "==", city).get()
             
             result = ""
             for doc in docs:
                 doc_data = doc.to_dict()
                 
-                # 依照您 Firestore 實際的欄位名稱取值
                 location = doc_data.get("location", "暫無資料")
                 condition = doc_data.get("condition", "暫無資料")
                 max_temp = doc_data.get("max_temp", "?")
@@ -127,22 +122,17 @@ def webhook():
                 pop = doc_data.get("pop", "?")
                 comfort = doc_data.get("comfort", "暫無資料")
                 
-                # 將結果組合成易讀的回覆格式
                 result += f"📍 地區：{location}\n"
                 result += f"☁️ 狀況：{condition}\n"
                 result += f"🌡️ 氣溫：{min_temp}°C ~ {max_temp}°C\n"
                 result += f"☔ 降雨機率：{pop}%\n"
                 result += f"👕 舒適度：{comfort}\n\n"
             
-            # 如果資料庫找不到該城市的資料
             if not result:
                 result = f"抱歉，目前資料庫中找不到【{city}】的天氣預報資料。"
                 
             info += result
 
-        # -------------------------------------------------------------
-        # 行為二：當機器人聽不懂時 (input.unknown)，調用 Gemini AI
-        # -------------------------------------------------------------
         elif action == "input.unknown":
             instruction_text = (
                 "你是一個熱心且知識豐富的專業智慧助理。"
@@ -154,7 +144,6 @@ def webhook():
                 system_instruction=instruction_text
             )
             
-            # 呼叫 Gemini AI 產生回覆
             query_text = req["queryResult"].get("queryText", "")
             response = client.models.generate_content(
                 model='gemini-3.5-flash', 
@@ -174,6 +163,8 @@ def webhook():
         info = f"後端 Webhook 發生錯誤：{str(e)}"
 
     return make_response(jsonify({"fulfillmentText": info}))
+
+
 @app.route("/rate")
 def save_weather_to_firestore():
 
@@ -192,7 +183,6 @@ def save_weather_to_firestore():
             params=params,
             timeout=15
         )
-
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
@@ -217,9 +207,7 @@ def save_weather_to_firestore():
     fail_count = 0
 
     for location_data in locations:
-
         try:
-
             location_name = location_data["locationName"]
 
             weather_elements = location_data["weatherElement"]
@@ -276,19 +264,14 @@ def save_weather_to_firestore():
             success_count += 1
 
         except Exception as e:
-
             print(
                 f"{location_data.get('locationName','未知縣市')} 處理失敗：{e}"
             )
-
             fail_count += 1
 
     try:
-
         batch.commit()
-
     except Exception as e:
-
         return f"Firestore 寫入失敗：{e}"
 
     return (
