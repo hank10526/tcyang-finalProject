@@ -95,11 +95,14 @@ def webhook():
             # 統一台/臺
             city = city.replace("台", "臺")
 
-            # 定義屬於「縣」的行政區（依照 Firestore 實際資料）
+            # 先去掉 Dialogflow 可能自動帶的縣/市後綴，統一再補
+            city = city.replace("市", "").replace("縣", "")
+
+            # 定義屬於「縣」的行政區
             county_list = ["彰化", "嘉義", "宜蘭", "屏東", "新竹", "苗栗", "南投", "雲林", "花蓮", "臺東", "澎湖", "金門", "連江"]
 
             # 補上正確的縣/市後綴
-            if city and not city.endswith("市") and not city.endswith("縣"):
+            if city:
                 if city in county_list:
                     city += "縣"
                 else:
