@@ -70,11 +70,6 @@ def AI():
 
 
 @app.route("/webhook", methods=["POST"])
-from flask import Flask, request, jsonify, make_response
-from google.cloud import firestore
-from google import genai
-from google.genai import types
-
 # 假設 client 已經在外部初始化（例如：client = genai.Client()）
 
 def webhook():
