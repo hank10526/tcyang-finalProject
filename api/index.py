@@ -97,41 +97,59 @@ def webhook():
         # 行為一：撈取 Firestore 的「今日天氣預報」
         # -------------------------------------------------------------
         if action == "weatherQuery" or action == "rateChoice":
-            # 從 Dialogflow 取得使用者想查詢的城市名稱
-            city = req["queryResult"]["parameters"].get("city", "")
-            
-            info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
-            
-            db = firestore.client()
-            collection_ref = db.collection("今日天氣預報")
-            
-            # 💡 根據您的資料庫，欄位名稱為 "location"
-            docs = collection_ref.where("location", "==", city).get()
-            
-            result = ""
-            for doc in docs:
-                doc_data = doc.to_dict()
-                
-                # 依照您 Firestore 實際的欄位名稱取值
-                location = doc_data.get("location", "暫無資料")
-                condition = doc_data.get("condition", "暫無資料")
-                max_temp = doc_data.get("max_temp", "?")
-                min_temp = doc_data.get("min_temp", "?")
-                pop = doc_data.get("pop", "?")
-                comfort = doc_data.get("comfort", "暫無資料")
-                
-                # 將結果組合成易讀的回覆格式
-                result += f"📍 地區：{location}\n"
-                result += f"☁️ 狀況：{condition}\n"
-                result += f"🌡️ 氣溫：{min_temp}°C ~ {max_temp}°C\n"
-                result += f"☔ 降雨機率：{pop}%\n"
-                result += f"👕 舒適度：{comfort}\n\n"
-            
-            # 如果資料庫找不到該城市的資料
-            if not result:
-                result = f"抱歉，目前資料庫中找不到【{city}】的天氣預報資料。"
-                
-            info += result
+
+    # 從 Dialogflow 取得使用者想查詢的城市名稱
+    city = req["queryResult"]["parameters"].get("city", "")
+
+    # 統一格式
+    city = city.replace("台", "臺")
+
+    # 補上「市」
+    if city and not city.endswith("市"):
+        city += "市"
+
+    info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
+
+    db = firestore.client()
+    collection_ref = db.collection("今日天氣預報")
+
+    print(f"查詢城市: {city}")
+
+    docs = list(
+        collection_ref.where(
+            "location",
+            "==",
+            city
+        ).get()
+    )
+
+    print(f"找到資料筆數: {len(docs)}")
+
+    result = ""
+
+    for doc in docs:
+
+        doc_data = doc.to_dict()
+
+        location = doc_data.get("location", "暫無資料")
+        condition = doc_data.get("condition", "暫無資料")
+        max_temp = doc_data.get("max_temp", "?")
+        min_temp = doc_data.get("min_temp", "?")
+        pop = doc_data.get("pop", "?")
+        comfort = doc_data.get("comfort", "暫無資料")
+
+        result += f"📍 地區：{location}\n"
+        result += f"☁️ 狀況：{condition}\n"
+        result += f"🌡️ 氣溫：{min_temp}°C ~ {max_temp}°C\n"
+        result += f"☔ 降雨機率：{pop}%\n"
+        result += f"👕 舒適度：{comfort}\n\n"
+
+    if not result:
+        result = (
+            f"抱歉，目前資料庫中找不到【{city}】的天氣預報資料。"
+        )
+
+    info += result
 
         # -------------------------------------------------------------
         # 行為二：當機器人聽不懂時 (input.unknown)，調用 Gemini AI
