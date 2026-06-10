@@ -96,7 +96,7 @@ def webhook():
         # -------------------------------------------------------------
         # 行為一：撈取 Firestore 的「今日天氣預報」
         # -------------------------------------------------------------
-        if action == "weatherQuery" or action == "rateChoice":
+if action == "weatherQuery" or action == "rateChoice":
 
     # 從 Dialogflow 取得使用者想查詢的城市名稱
     city = req["queryResult"]["parameters"].get("city", "")
