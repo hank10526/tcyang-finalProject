@@ -13,7 +13,6 @@ import pytz
 from datetime import datetime
 from firebase_admin import firestore
 from flask import Flask, request, jsonify, make_response
-from google.cloud import firestore
 from google import genai
 from google.genai import types
 
@@ -90,7 +89,7 @@ def webhook():
             
             info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
             
-            db = firestore.Client()
+            db = firestore.client()
             collection_ref = db.collection("今日天氣預報")
             
             # 💡 根據您的資料庫，欄位名稱為 "location"
