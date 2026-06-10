@@ -90,7 +90,7 @@ def webhook():
             
             info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
             
-            db = firestore.client()
+            db = firestore.Client()
             collection_ref = db.collection("今日天氣預報")
             
             # 💡 根據您的資料庫，欄位名稱為 "location"
