@@ -66,50 +66,89 @@ def AI():
 
 
 @app.route("/webhook", methods=["POST"])
+from flask import Flask, request, jsonify, make_response
+from google.cloud import firestore
+from google import genai
+from google.genai import types
+
+# 假設 client 已經在外部初始化（例如：client = genai.Client()）
+
 def webhook():
-    # build a request object
-    req = request.get_json(force=True)
-    # fetch queryResult from json
-    action =  req["queryResult"]["action"]
+    # 初始化預設回覆，避免極端狀況下變數未定義
+    info = "抱歉，系統處理時發生錯誤。"
+    
+    try:
+        # 建立 request 物件並取得 action
+        req = request.get_json(force=True)
+        action = req.get("queryResult", {}).get("action", "")
 
-    if (action == "rateChoice"):
-        rate = req["queryResult"]["parameters"]["rate"]
-        info = "我是林憲墉開發的電影聊天機器人,您選擇的電影分級是：" + rate
-        db = firestore.client()
-        collection_ref = db.collection("本週新片含分級")
-        docs = collection_ref.get()
-        result = ""
-        for doc in docs:
-            dict = doc.to_dict()
-            if rate in dict["rate"]:
-                result += "片名：" + dict["title"] + "\n"
-                result += "介紹：" + dict["hyperlink"] + "\n\n"
-        info += result
+        # -------------------------------------------------------------
+        # 行為一：撈取 Firestore 的「今日天氣預報」
+        # -------------------------------------------------------------
+        # 這裡將 action 名稱改為更符合天氣情境的 "weatherQuery" (可依據你 Dialogflow 的設定修改)
+        if action == "weatherQuery" or action == "rateChoice":
+            # 假設 Dialogflow 傳入的參數名稱改為 "city" (地區/城市)
+            city = req["queryResult"]["parameters"].get("city", "")
+            
+            info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
+            
+            db = firestore.client()
+            collection_ref = db.collection("今日天氣預報")
+            
+            # 💡 優化：直接在 Firestore 進行條件篩選 (假設資料庫內欄位叫 "city")
+            docs = collection_ref.where("city", "==", city).get()
+            
+            result = ""
+            for doc in docs:
+                doc_data = doc.to_dict()  # 更改變數名稱，避免覆蓋 Python 內建的 dict
+                
+                # 這裡假設你的天氣文件欄位有：condition(天氣狀態) 與 temperature(氣溫)
+                condition = doc_data.get("condition", "暫無資料")
+                temperature = doc_data.get("temperature", "暫無資料")
+                
+                result += f"地區：{city}\n"
+                result += f"天氣狀況：{condition}\n"
+                result += f"今日氣溫：{temperature}\n\n"
+            
+            # 如果資料庫找不到該城市的資料
+            if not result:
+                result = f"抱歉，目前資料庫中找不到【{city}】的天氣預報資料。"
+                
+            info += result
 
-    elif (action == "input.unknown"):
-        instruction_text = (
-            "你是一個熱心且知識豐富的專業智慧助理。"
-            "對於使用者的提問，請回覆重點的關鍵字，不要重述問題。"         
-        )
+        # -------------------------------------------------------------
+        # 行為二：當機器人聽不懂時 (input.unknown)，調用 Gemini AI
+        # -------------------------------------------------------------
+        elif action == "input.unknown":
+            instruction_text = (
+                "你是一個熱心且知識豐富的專業智慧助理。"
+                "對於使用者的提問，請回覆重點的關鍵字，不要重述問題。"         
+            )
 
+            ai_config = types.GenerateContentConfig(
+                max_output_tokens=500, 
+                system_instruction=instruction_text
+            )
+            
+            # 呼叫 Gemini AI 產生回覆
+            query_text = req["queryResult"].get("queryText", "")
+            response = client.models.generate_content(
+                model='gemini-3.5-flash', 
+                contents=query_text,
+                config=ai_config,
+            )
 
-        ai_config = types.GenerateContentConfig(
-            max_output_tokens=500, 
-            system_instruction=instruction_text
-        )
-        response = client.models.generate_content(
-            model='gemini-3.5-flash', 
-            contents=req["queryResult"]["queryText"],
-            config=ai_config,
-        )
-
-        if response.text:
-            info = response.text
+            if response.text:
+                info = response.text
+            else:
+                info = "抱歉，我現在無法生成回應，請稍後再試。"
+                
         else:
-            info = "抱歉，我現在無法生成回應，請稍後再試。"
+            info = "機器人收到了未知的 Action 請求。"
 
-
-
+    except Exception as e:
+        # 捕捉後端可能發生的任何錯誤，方便你在 Log 中排查，同時不會讓 Bot 直接死掉
+        info = f"後端 Webhook 發生錯誤：{str(e)}"
 
     return make_response(jsonify({"fulfillmentText": info}))
 #改全台天氣預報(降雨率)
