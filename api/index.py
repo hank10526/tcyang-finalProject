@@ -70,7 +70,10 @@ def AI():
 
 
 @app.route("/webhook", methods=["POST"])
-
+from flask import Flask, request, jsonify, make_response
+from google.cloud import firestore
+from google import genai
+from google.genai import types
 
 # 假設 client 已經在外部初始化（例如：client = genai.Client()）
 
@@ -86,9 +89,8 @@ def webhook():
         # -------------------------------------------------------------
         # 行為一：撈取 Firestore 的「今日天氣預報」
         # -------------------------------------------------------------
-        # 這裡將 action 名稱改為更符合天氣情境的 "weatherQuery" (可依據你 Dialogflow 的設定修改)
         if action == "weatherQuery" or action == "rateChoice":
-            # 假設 Dialogflow 傳入的參數名稱改為 "city" (地區/城市)
+            # 從 Dialogflow 取得使用者想查詢的城市名稱
             city = req["queryResult"]["parameters"].get("city", "")
             
             info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
@@ -96,20 +98,27 @@ def webhook():
             db = firestore.client()
             collection_ref = db.collection("今日天氣預報")
             
-            # 💡 優化：直接在 Firestore 進行條件篩選 (假設資料庫內欄位叫 "city")
-            docs = collection_ref.where("city", "==", city).get()
+            # 💡 根據您的資料庫，欄位名稱為 "location"
+            docs = collection_ref.where("location", "==", city).get()
             
             result = ""
             for doc in docs:
-                doc_data = doc.to_dict()  # 更改變數名稱，避免覆蓋 Python 內建的 dict
+                doc_data = doc.to_dict()
                 
-                # 這裡假設你的天氣文件欄位有：condition(天氣狀態) 與 temperature(氣溫)
+                # 依照您 Firestore 實際的欄位名稱取值
+                location = doc_data.get("location", "暫無資料")
                 condition = doc_data.get("condition", "暫無資料")
-                temperature = doc_data.get("temperature", "暫無資料")
+                max_temp = doc_data.get("max_temp", "?")
+                min_temp = doc_data.get("min_temp", "?")
+                pop = doc_data.get("pop", "?")
+                comfort = doc_data.get("comfort", "暫無資料")
                 
-                result += f"地區：{city}\n"
-                result += f"天氣狀況：{condition}\n"
-                result += f"今日氣溫：{temperature}\n\n"
+                # 將結果組合成易讀的回覆格式
+                result += f"📍 地區：{location}\n"
+                result += f"☁️ 狀況：{condition}\n"
+                result += f"🌡️ 氣溫：{min_temp}°C ~ {max_temp}°C\n"
+                result += f"☔ 降雨機率：{pop}%\n"
+                result += f"👕 舒適度：{comfort}\n\n"
             
             # 如果資料庫找不到該城市的資料
             if not result:
@@ -148,11 +157,9 @@ def webhook():
             info = "機器人收到了未知的 Action 請求。"
 
     except Exception as e:
-        # 捕捉後端可能發生的任何錯誤，方便你在 Log 中排查，同時不會讓 Bot 直接死掉
         info = f"後端 Webhook 發生錯誤：{str(e)}"
 
     return make_response(jsonify({"fulfillmentText": info}))
-#改全台天氣預報(降雨率)
 @app.route("/rate")
 def save_weather_to_firestore():
 
