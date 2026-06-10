@@ -107,7 +107,7 @@ def webhook():
             if city and not city.endswith("市"):
                     city += "市"
 
-            info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
+            info = f"我是天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
             
             db = firestore.client()
             collection_ref = db.collection("今日天氣預報")
