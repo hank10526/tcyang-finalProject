@@ -3,4 +3,5 @@ requests
 bs4
 firebase-admin
 google-genai
+pytz
 
