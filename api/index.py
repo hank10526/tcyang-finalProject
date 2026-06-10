@@ -55,6 +55,19 @@ def ask():
     else:    
         # 當使用者直接打開網頁 (GET) 時，顯示輸入框畫面
         return render_template("ask.html")
+@app.route("/test")
+def test():
+
+    db = firestore.client()
+
+    docs = db.collection("今日天氣預報").get()
+
+    result = ""
+
+    for doc in docs:
+        result += str(doc.to_dict()) + "<br><br>"
+
+    return result
 
 @app.route("/AI")
 def AI():
