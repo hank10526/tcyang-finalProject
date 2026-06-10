@@ -99,7 +99,14 @@ def webhook():
         if action == "weatherQuery" or action == "rateChoice":
             # 從 Dialogflow 取得使用者想查詢的城市名稱
             city = req["queryResult"]["parameters"].get("city", "")
-            
+
+# 統一台/臺
+            city = city.replace("台", "臺")
+
+# 補上市
+            if city and not city.endswith("市"):
+                    city += "市"
+
             info = f"我是林憲墉開發的天氣聊天機器人，正在為您查詢【{city}】的今日天氣預報：\n\n"
             
             db = firestore.client()
